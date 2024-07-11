@@ -19,7 +19,7 @@ public:
 	~Server();
 
 signals:
-	void messageReceived(const QString &message);
+	void messageReceived(const QString &message, QWebSocket *socket);
 
 private slots:
 	void newConnection();

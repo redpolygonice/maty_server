@@ -15,6 +15,21 @@ Settings::Settings(QObject *parent)
 	params_["port"] = 1978;
 }
 
+QString Settings::logPath() const
+{
+	QDir logDir = Settings::dataPath() + QDir::separator() + "log";
+	if (!logDir.exists())
+		logDir.mkpath(".");
+
+#ifdef WIN32
+	QString logPath = logDir.path().replace('/', '\\');
+#else
+	QString logPath = logDir.path();
+#endif
+
+	return logPath;
+}
+
 QString Settings::dataPath()
 {
 	QDir appDir = QCoreApplication::applicationDirPath();

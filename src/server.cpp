@@ -45,7 +45,8 @@ void Server::closed()
 
 void Server::processTextMessage(const QString &message)
 {
-	emit messageReceived(message);
+	QWebSocket *socket = qobject_cast<QWebSocket *>(sender());
+	emit messageReceived(message, socket);
 }
 
 void Server::processBinaryMessage(const QByteArray &message)

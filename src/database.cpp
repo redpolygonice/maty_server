@@ -1,6 +1,7 @@
 #include "database.h"
 #include "dbnames.h"
 #include "settings.h"
+#include "log.h"
 
 #include <QVariant>
 #include <QDebug>
@@ -51,7 +52,7 @@ bool Database::createTables()
 					"red BOOLEAN,"
 					"ts TIMESTAMP NOT NULL)"))
 	{
-		qDebug() << query.lastError().text();
+		LOGE(query.lastError().text().toStdString());
 		return false;
 	}
 
@@ -64,7 +65,7 @@ bool Database::createTables()
 					"phone VARCHAR(20),"
 					"ts TIMESTAMP NOT NULL)"))
 	{
-		qDebug() << query.lastError().text();
+		LOGE(query.lastError().text().toStdString());
 		return false;
 	}
 
@@ -92,7 +93,7 @@ bool Database::appendHistory(const QVariantList &list)
 
 	if (!query.exec())
 	{
-		qDebug() << query.lastError().text();
+		LOGE(query.lastError().text().toStdString());
 		return false;
 	}
 
@@ -107,7 +108,7 @@ bool Database::removeHistory(int id)
 
 	if (!query.exec())
 	{
-		qDebug() << query.lastError().text();
+		LOGE(query.lastError().text().toStdString());
 		return false;
 	}
 
@@ -123,7 +124,7 @@ bool Database::modifyHistory(int id, const QString &text)
 
 	if (!query.exec())
 	{
-		qDebug() << query.lastError().text();
+		LOGE(query.lastError().text().toStdString());
 		return false;
 	}
 
@@ -138,20 +139,19 @@ bool Database::clearHistory(int cid)
 
 	if (!query.exec())
 	{
-		qDebug() << query.lastError().text();
+		LOGE(query.lastError().text().toStdString());
 		return false;
 	}
 
 	return true;
 }
 
-bool Database::appendContact(const QJsonObject &object)
+int Database::appendContact(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
 	query.prepare("INSERT INTO " + QString(kContactsName) + " (name, login, password, image, phone, ts)"
 												" VALUES (:name, :login, :password, :image, :phone, :ts)");
 
-	query.bindValue(":id", object["cid"].toInt());
 	query.bindValue(":name", object["name"].toString());
 	query.bindValue(":login", object["login"].toString());
 	query.bindValue(":password", object["password"].toString());
@@ -161,11 +161,19 @@ bool Database::appendContact(const QJsonObject &object)
 
 	if (!query.exec())
 	{
-		qDebug() << query.lastError().text();
-		return false;
+		LOGE(query.lastError().text().toStdString());
+		return 0;
 	}
 
-	return true;
+	query.prepare("SELECT id FROM " + QString(kContactsName));
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return 0;
+	}
+
+	query.last();
+	return query.value(0).toInt();
 }
 
 bool Database::modifyContact(const QJsonObject &object)
@@ -173,7 +181,7 @@ bool Database::modifyContact(const QJsonObject &object)
 	QSqlQuery query(db_);
 	query.prepare("UPDATE " + QString(kContactsName) + " SET name = :name, login = :login,"
 													   " password = :password. image = :image, "
-													   "phone = :phone WHERE id = :id");
+													   "phone = :phone WHERE id = :cid");
 
 	query.bindValue(":id", object["cid"].toInt());
 	query.bindValue(":name", object["name"].toString());
@@ -184,7 +192,7 @@ bool Database::modifyContact(const QJsonObject &object)
 
 	if (!query.exec())
 	{
-		qDebug() << query.lastError().text();
+		LOGE(query.lastError().text().toStdString());
 		return false;
 	}
 
@@ -199,7 +207,7 @@ bool Database::removeContact(const QJsonObject &object)
 
 	if (!query.exec())
 	{
-		qDebug() << query.lastError().text();
+		LOGE(query.lastError().text().toStdString());
 		return false;
 	}
 
@@ -214,9 +222,28 @@ bool Database::contactExists(const QJsonObject &object) const
 
 	if (!query.exec())
 	{
-		qDebug() << query.lastError().text();
+		LOGE(query.lastError().text().toStdString());
 		return true;
 	}
 
-	return query.size() > 0;
+	return query.next();
+}
+
+QString Database::getPassword(int cid) const
+{
+	QSqlQuery query(db_);
+	query.prepare("SELECT password FROM " + QString(kContactsName) + " WHERE id = :cid");
+	query.bindValue(":cid", cid);
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return "";
+	}
+
+	if (!query.next())
+		return "";
+
+	query.first();
+	return query.value(0).toString();
 }

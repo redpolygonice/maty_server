@@ -20,10 +20,13 @@ public:
 		Message
 	};
 
-	enum class Code
+	enum class ErrorCode
 	{
 		Ok,
-		Error
+		Error,
+		LoginExists,
+		NoLogin,
+		Password
 	};
 
 private:
@@ -36,12 +39,16 @@ public:
 	~Dispatcher();
 
 private slots:
-	void processMessage(const QString &message);
+	void processMessage(const QString &message, QWebSocket *socket);
 	void sendMessage(const QString &message, const Client &client);
 
 public:
 	bool start();
 	void stop();
+
+private:
+	void actionRegistration(const QJsonObject &object, QWebSocket *socket);
+	void actionAuth(const QJsonObject &object, QWebSocket *socket);
 };
 
 using DispatcherPtr = QSharedPointer<Dispatcher>;

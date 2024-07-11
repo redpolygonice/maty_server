@@ -20,6 +20,7 @@ private:
 	explicit Settings(QObject *parent = nullptr);
 
 public:
+	QString logPath() const;
 	static QString dataPath();
 	bool load();
 	bool save();
