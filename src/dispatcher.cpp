@@ -3,6 +3,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QCryptographicHash>
 
 Dispatcher::Dispatcher()
 {
@@ -55,6 +56,8 @@ void Dispatcher::processMessage(const QString &message, QWebSocket *socket)
 		actionRegistration(rootObject, socket);
 	else if (action == Action::Auth)
 		actionAuth(rootObject, socket);
+	else if (action == Action::Search)
+		actionSearch(rootObject, socket);
 }
 
 void Dispatcher::sendMessage(const QString &message, const Client &client)
@@ -62,7 +65,7 @@ void Dispatcher::sendMessage(const QString &message, const Client &client)
 	client.socket()->sendTextMessage(message);
 }
 
-void Dispatcher::actionRegistration(const QJsonObject &object, QWebSocket *socket)
+void Dispatcher::actionRegistration(QJsonObject &object, QWebSocket *socket)
 {
 	QJsonObject contact;
 	contact["action"] = static_cast<int>(Action::Registration);
@@ -71,6 +74,8 @@ void Dispatcher::actionRegistration(const QJsonObject &object, QWebSocket *socke
 		contact["code"] = static_cast<int>(ErrorCode::LoginExists);
 	else
 	{
+		object["password"] = QString(QCryptographicHash::hash(object["password"].toString().toLocal8Bit(),
+									 QCryptographicHash::Sha256).toHex());
 		contact["code"] = static_cast<int>(ErrorCode::Ok);
 		contact["cid"] = db_.appendContact(object);
 	}
@@ -85,10 +90,23 @@ void Dispatcher::actionAuth(const QJsonObject &object, QWebSocket *socket)
 
 	if (!db_.contactExists(object))
 		contact["code"] = static_cast<int>(ErrorCode::NoLogin);
-	else if (object["password"].toString() != db_.getPassword(object["cid"].toInt()))
+	else if (QString(QCryptographicHash::hash(object["password"].toString().toLocal8Bit(),
+					QCryptographicHash::Sha256).toHex()) != db_.getPassword(object["cid"].toInt()))
 		contact["code"] = static_cast<int>(ErrorCode::Password);
 	else
 		contact["code"] = static_cast<int>(ErrorCode::Ok);
 
 	socket->sendTextMessage(QJsonDocument(contact).toJson(QJsonDocument::Compact));
+}
+
+void Dispatcher::actionSearch(const QJsonObject &object, QWebSocket *socket)
+{
+	QJsonObject root;
+	if (!db_.searchContacts(root, object["text"].toString()))
+		root["searchResult"] = static_cast<int>(SearchResult::NotFound);
+	else
+		root["searchResult"] = static_cast<int>(SearchResult::Found);
+
+	root["action"] = static_cast<int>(Action::Search);
+	socket->sendTextMessage(QJsonDocument(root).toJson(QJsonDocument::Compact));
 }

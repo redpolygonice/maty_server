@@ -17,7 +17,8 @@ public:
 		None,
 		Registration,
 		Auth,
-		Message
+		Message,
+		Search
 	};
 
 	enum class ErrorCode
@@ -27,6 +28,12 @@ public:
 		LoginExists,
 		NoLogin,
 		Password
+	};
+
+	enum class SearchResult
+	{
+		Found,
+		NotFound
 	};
 
 private:
@@ -47,8 +54,9 @@ public:
 	void stop();
 
 private:
-	void actionRegistration(const QJsonObject &object, QWebSocket *socket);
+	void actionRegistration(QJsonObject &object, QWebSocket *socket);
 	void actionAuth(const QJsonObject &object, QWebSocket *socket);
+	void actionSearch(const QJsonObject &object, QWebSocket *socket);
 };
 
 using DispatcherPtr = QSharedPointer<Dispatcher>;

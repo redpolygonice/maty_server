@@ -7,6 +7,7 @@
 #include <QDebug>
 #include <QCoreApplication>
 #include <QDir>
+#include <QJsonArray>
 
 Database::Database()
 {
@@ -246,4 +247,31 @@ QString Database::getPassword(int cid) const
 
 	query.first();
 	return query.value(0).toString();
+}
+
+bool Database::searchContacts(QJsonObject &object, const QString &name)
+{
+	QSqlQuery query(db_);
+	query.prepare("SELECT * FROM " + QString(kContactsName) + " WHERE login LIKE '%" + name + "%'");
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return false;
+	}
+
+	QJsonArray array;
+	while (query.next())
+	{
+		QJsonObject contact;
+		contact["cid"] = query.value("id").toInt();
+		contact["name"] = query.value("name").toString();
+		contact["login"] = query.value("login").toString();
+		contact["image"] = query.value("image").toString();
+		contact["phone"] = query.value("phone").toString();
+		array.push_back(contact);
+	}
+
+	object["contacts"] = array;
+	return array.size() > 0;
 }
