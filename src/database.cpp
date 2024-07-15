@@ -50,7 +50,7 @@ bool Database::createTables()
 					"cid INTEGER KEY NOT NULL, "
 					"rid INTEGER KEY NOT NULL, "
 					"text TEXT NOT NULL,"
-					"red BOOLEAN,"
+					"read BOOLEAN,"
 					"ts TIMESTAMP NOT NULL)"))
 	{
 		LOGE(query.lastError().text().toStdString());
@@ -64,6 +64,17 @@ bool Database::createTables()
 					"password VARCHAR(50) NOT NULL,"
 					"image TEXT,"
 					"phone VARCHAR(20),"
+					"about VARCHAR(250),"
+					"ts TIMESTAMP NOT NULL)"))
+	{
+		LOGE(query.lastError().text().toStdString());
+		return false;
+	}
+
+	if (!query.exec("CREATE TABLE " + QString(kLinkContactsName) + " ("
+					"id INTEGER PRIMARY KEY AUTOINCREMENT, "
+					"cid INTEGER KEY NOT NULL, "
+					"rid INTEGER KEY NOT NULL, "
 					"ts TIMESTAMP NOT NULL)"))
 	{
 		LOGE(query.lastError().text().toStdString());
@@ -230,11 +241,11 @@ bool Database::contactExists(const QJsonObject &object) const
 	return query.next();
 }
 
-QString Database::getPassword(int cid) const
+QString Database::getPassword(const QString &login) const
 {
 	QSqlQuery query(db_);
-	query.prepare("SELECT password FROM " + QString(kContactsName) + " WHERE id = :cid");
-	query.bindValue(":cid", cid);
+	query.prepare("SELECT password FROM " + QString(kContactsName) + " WHERE login = :login");
+	query.bindValue(":login", login);
 
 	if (!query.exec())
 	{
@@ -249,7 +260,7 @@ QString Database::getPassword(int cid) const
 	return query.value(0).toString();
 }
 
-bool Database::searchContacts(QJsonObject &object, const QString &name)
+bool Database::searchContacts(QJsonObject &object, const QString &name, int cid)
 {
 	QSqlQuery query(db_);
 	query.prepare("SELECT * FROM " + QString(kContactsName) + " WHERE login LIKE '%" + name + "%'");
@@ -263,6 +274,10 @@ bool Database::searchContacts(QJsonObject &object, const QString &name)
 	QJsonArray array;
 	while (query.next())
 	{
+		// My contact
+		if (query.value("id").toInt() == cid)
+			continue;
+
 		QJsonObject contact;
 		contact["cid"] = query.value("id").toInt();
 		contact["name"] = query.value("name").toString();
@@ -274,4 +289,127 @@ bool Database::searchContacts(QJsonObject &object, const QString &name)
 
 	object["contacts"] = array;
 	return array.size() > 0;
+}
+
+bool Database::queryContact(QJsonObject &contact, const QString &login)
+{
+	QSqlQuery query(db_);
+	query.prepare("SELECT * FROM " + QString(kContactsName) + " WHERE login = :login");
+	query.bindValue(":login", login);
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return true;
+	}
+
+	if (!query.next())
+		return false;
+
+	contact["cid"] = query.value("id").toInt();
+	contact["name"] = query.value("name").toString();
+	contact["login"] = query.value("login").toString();
+	contact["image"] = query.value("image").toString();
+	contact["phone"] = query.value("phone").toString();
+
+	// Links
+	query.prepare("SELECT * FROM " + QString(kLinkContactsName) + " WHERE cid = :cid");
+	query.bindValue(":cid", query.value("id").toInt());
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return true;
+	}
+
+	if (!query.next())
+		return true;
+
+	QJsonArray links;
+	while (query.next())
+	{
+		QJsonObject link;
+		link["cid"] = query.value("cid").toInt();
+		link["rid"] = query.value("rid").toInt();
+		links.push_back(link);
+	}
+
+	contact["links"] = links;
+	return true;
+}
+
+bool Database::queryContact(QJsonObject& contact, int cid)
+{
+	QSqlQuery query(db_);
+	query.prepare("SELECT * FROM " + QString(kContactsName) + " WHERE id = :cid");
+	query.bindValue(":cid", cid);
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return true;
+	}
+
+	if (!query.next())
+		return false;
+
+	contact["cid"] = query.value("id").toInt();
+	contact["name"] = query.value("name").toString();
+	contact["login"] = query.value("login").toString();
+	contact["image"] = query.value("image").toString();
+	contact["phone"] = query.value("phone").toString();
+	return true;
+}
+
+bool Database::linkContact(const QJsonObject &object)
+{
+	QSqlQuery query(db_);
+	query.prepare("INSERT INTO " + QString(kLinkContactsName) + " (cid, rid, ts)"
+															" VALUES (:cid, :rid, :ts)");
+
+	query.bindValue(":cid", object["cid"].toInt());
+	query.bindValue(":rid", object["rid"].toInt());
+	query.bindValue(":ts", QVariant(QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss")));
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return false;
+	}
+
+	return true;
+}
+
+bool Database::unlinkContact(const QJsonObject &object)
+{
+	QSqlQuery query(db_);
+	query.prepare("DELETE FROM " + QString(kLinkContactsName) + " WHERE cid = :cid AND rid = :rid");
+	query.bindValue(":cid", object["cid"].toInt());
+	query.bindValue(":rid", object["rid"].toInt());
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return false;
+	}
+
+	return true;
+}
+
+IntList Database::queryLinks(int cid)
+{
+	IntList rids;
+	QSqlQuery query(db_);
+	query.prepare("SELECT rid FROM " + QString(kLinkContactsName) + " WHERE cid = :cid");
+	query.bindValue(":cid", cid);
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return rids;
+	}
+
+	while (query.next())
+		rids.push_back(query.value("rid").toInt());
+
+	return rids;
 }

@@ -18,7 +18,10 @@ public:
 		Registration,
 		Auth,
 		Message,
-		Search
+		Search,
+		LinkContact,
+		UnlinkContact,
+		ClearHistory
 	};
 
 	enum class ErrorCode
@@ -57,6 +60,9 @@ private:
 	void actionRegistration(QJsonObject &object, QWebSocket *socket);
 	void actionAuth(const QJsonObject &object, QWebSocket *socket);
 	void actionSearch(const QJsonObject &object, QWebSocket *socket);
+	void actionMessage(const QJsonObject &object, QWebSocket *socket);
+	void actionLinkContact(const QJsonObject &object, QWebSocket *socket);
+	void actionUnlinkContact(const QJsonObject &object, QWebSocket *socket);
 };
 
 using DispatcherPtr = QSharedPointer<Dispatcher>;

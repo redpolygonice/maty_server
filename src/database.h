@@ -16,6 +16,7 @@
 
 using HistoryRecord = std::tuple<QString, QString, QDateTime>;
 using JsonObjectList = QList<QJsonObject>;
+using IntList = QList<int>;
 
 // Sqlite database
 class Database : public QObject
@@ -46,8 +47,13 @@ public:
 	bool modifyContact(const QJsonObject &object);
 	bool removeContact(const QJsonObject &object);
 	bool contactExists(const QJsonObject &object) const;
-	QString getPassword(int cid) const;
-	bool searchContacts(QJsonObject &object, const QString &name);
+	QString getPassword(const QString &login) const;
+	bool searchContacts(QJsonObject &object, const QString &name, int cid);
+	bool queryContact(QJsonObject &contact, const QString &login);
+	bool queryContact(QJsonObject &contact, int cid);
+	bool linkContact(const QJsonObject &object);
+	bool unlinkContact(const QJsonObject &object);
+	IntList queryLinks(int cid);
 
 public:
 	bool open();
