@@ -47,10 +47,12 @@ bool Database::createTables()
 	QSqlQuery query(db_);
 	if (!query.exec("CREATE TABLE " + QString(kHistoryName) + " ("
 					"id INTEGER PRIMARY KEY AUTOINCREMENT, "
+					"hid INTEGER KEY NOT NULL, "
 					"cid INTEGER KEY NOT NULL, "
 					"rid INTEGER KEY NOT NULL, "
 					"text TEXT NOT NULL,"
 					"read BOOLEAN,"
+					"sync BOOLEAN,"
 					"ts TIMESTAMP NOT NULL)"))
 	{
 		LOGE(query.lastError().text().toStdString());
@@ -75,6 +77,7 @@ bool Database::createTables()
 					"id INTEGER PRIMARY KEY AUTOINCREMENT, "
 					"cid INTEGER KEY NOT NULL, "
 					"rid INTEGER KEY NOT NULL, "
+					"approved BOOLEAN,"
 					"ts TIMESTAMP NOT NULL)"))
 	{
 		LOGE(query.lastError().text().toStdString());
@@ -89,19 +92,34 @@ void Database::close()
 	db_.close();
 }
 
-bool Database::appendHistory(const QVariantList &list)
+bool Database::appendHistory(const QJsonObject &object)
 {
-	if (list[0].toInt() <= 0)
-		return false;
-
 	QSqlQuery query(db_);
-	query.prepare("INSERT INTO " + QString(kHistoryName) + " (cid, sender, text, ts)"
-					" VALUES (:cid, :sender, :text, :ts)");
+	query.prepare("INSERT INTO " + QString(kHistoryName) + " (hid, cid, rid, text, read, ts)"
+					" VALUES (:hid, :cid, :rid, :text, :read, :ts)");
 
-	query.bindValue(":cid", list[0]);
-	query.bindValue(":sender", list[1]);
-	query.bindValue(":text", list[2]);
+	query.bindValue(":hid", object["hid"].toInt());
+	query.bindValue(":cid", object["cid"].toInt());
+	query.bindValue(":rid",  object["rid"].toInt());
+	query.bindValue(":text", object["text"].toString());
+	query.bindValue(":read", false);
 	query.bindValue(":ts", QVariant(QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss")));
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return false;
+	}
+
+	return true;
+}
+
+bool Database::modifyHistory(const QJsonObject &object)
+{
+	QSqlQuery query(db_);
+	query.prepare("UPDATE " + QString(kHistoryName) + " SET text = :text WHERE id = :id");
+	query.bindValue(":id", object["id"].toInt());
+	query.bindValue(":text", object["text"].toString());
 
 	if (!query.exec())
 	{
@@ -127,12 +145,11 @@ bool Database::removeHistory(int id)
 	return true;
 }
 
-bool Database::modifyHistory(int id, const QString &text)
+bool Database::clearHistory(int cid)
 {
 	QSqlQuery query(db_);
-	query.prepare("UPDATE " + QString(kHistoryName) + " SET text = :text WHERE id = :id");
-	query.bindValue(":id", id);
-	query.bindValue(":text", text);
+	query.prepare("DELETE FROM " + QString(kHistoryName) + " WHERE cid = :cid");
+	query.bindValue(":cid", cid);
 
 	if (!query.exec())
 	{
@@ -143,11 +160,46 @@ bool Database::modifyHistory(int id, const QString &text)
 	return true;
 }
 
-bool Database::clearHistory(int cid)
+bool Database::queryHistory(VariantMapList& mapList, const QVariantMap &options)
+{
+	mapList.clear();
+	QSqlQuery query(db_);
+
+	if (options["all"].toBool())
+		query.prepare("SELECT * FROM " + QString(kHistoryName) +
+				" WHERE rid = " + QString::number(options["cid"].toInt()) +
+				" OR cid = " + QString::number(options["cid"].toInt()));
+	else
+		query.prepare("SELECT * FROM " + QString(kHistoryName) +
+					  " WHERE read IS FALSE"
+					  " AND rid = " + QString::number(options["cid"].toInt()));
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return false;
+	}
+
+	while (query.next())
+	{
+		QVariantMap history;
+		history["hid"] = query.value("hid").toInt();
+		history["cid"] = query.value("cid").toInt();
+		history["rid"] = query.value("rid").toInt();
+		history["text"] = query.value("text").toString();
+		history["read"] = query.value("read").toBool();
+		history["ts"] = query.value("ts").toDateTime();
+		mapList.push_back(history);
+	}
+
+	return mapList.size() > 0;
+}
+
+bool Database::setReadHistory(int cid)
 {
 	QSqlQuery query(db_);
-	query.prepare("DELETE FROM " + QString(kHistoryName) + " WHERE cid = :cid");
-	query.bindValue(":cid", cid);
+	query.prepare("UPDATE " + QString(kHistoryName) + " SET read = 1 WHERE rid = :rid OR cid = :rid");
+	query.bindValue(":rid", cid);
 
 	if (!query.exec())
 	{
@@ -177,6 +229,7 @@ int Database::appendContact(const QJsonObject &object)
 		return 0;
 	}
 
+	// Query contact id
 	query.prepare("SELECT id FROM " + QString(kContactsName));
 	if (!query.exec())
 	{
@@ -193,9 +246,9 @@ bool Database::modifyContact(const QJsonObject &object)
 	QSqlQuery query(db_);
 	query.prepare("UPDATE " + QString(kContactsName) + " SET name = :name, login = :login,"
 													   " password = :password. image = :image, "
-													   "phone = :phone WHERE id = :cid");
+													   "phone = :phone WHERE id = :id");
 
-	query.bindValue(":id", object["cid"].toInt());
+	query.bindValue(":id", object["id"].toInt());
 	query.bindValue(":name", object["name"].toString());
 	query.bindValue(":login", object["login"].toString());
 	query.bindValue(":password", object["password"].toString());
@@ -215,7 +268,7 @@ bool Database::removeContact(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
 	query.prepare("DELETE FROM " + QString(kContactsName) + " WHERE id = :id");
-	query.bindValue(":id", object["cid"].toInt());
+	query.bindValue(":id", object["id"].toInt());
 
 	if (!query.exec())
 	{
@@ -241,7 +294,7 @@ bool Database::contactExists(const QJsonObject &object) const
 	return query.next();
 }
 
-QString Database::getPassword(const QString &login) const
+QString Database::queryPassword(const QString &login) const
 {
 	QSqlQuery query(db_);
 	query.prepare("SELECT password FROM " + QString(kContactsName) + " WHERE login = :login");
@@ -279,7 +332,7 @@ bool Database::searchContacts(QJsonObject &object, const QString &name, int cid)
 			continue;
 
 		QJsonObject contact;
-		contact["cid"] = query.value("id").toInt();
+		contact["id"] = query.value("id").toInt();
 		contact["name"] = query.value("name").toString();
 		contact["login"] = query.value("login").toString();
 		contact["image"] = query.value("image").toString();
@@ -306,7 +359,7 @@ bool Database::queryContact(QJsonObject &contact, const QString &login)
 	if (!query.next())
 		return false;
 
-	contact["cid"] = query.value("id").toInt();
+	contact["id"] = query.value("id").toInt();
 	contact["name"] = query.value("name").toString();
 	contact["login"] = query.value("login").toString();
 	contact["image"] = query.value("image").toString();
@@ -314,7 +367,7 @@ bool Database::queryContact(QJsonObject &contact, const QString &login)
 
 	// Links
 	query.prepare("SELECT * FROM " + QString(kLinkContactsName) + " WHERE cid = :cid");
-	query.bindValue(":cid", query.value("id").toInt());
+	query.bindValue(":cid", contact["id"].toInt());
 	if (!query.exec())
 	{
 		LOGE(query.lastError().text().toStdString());
@@ -337,11 +390,11 @@ bool Database::queryContact(QJsonObject &contact, const QString &login)
 	return true;
 }
 
-bool Database::queryContact(QJsonObject& contact, int cid)
+bool Database::queryContact(QJsonObject& contact, int id)
 {
 	QSqlQuery query(db_);
-	query.prepare("SELECT * FROM " + QString(kContactsName) + " WHERE id = :cid");
-	query.bindValue(":cid", cid);
+	query.prepare("SELECT * FROM " + QString(kContactsName) + " WHERE id = :id");
+	query.bindValue(":id", id);
 
 	if (!query.exec())
 	{
@@ -352,7 +405,7 @@ bool Database::queryContact(QJsonObject& contact, int cid)
 	if (!query.next())
 		return false;
 
-	contact["cid"] = query.value("id").toInt();
+	contact["id"] = query.value("id").toInt();
 	contact["name"] = query.value("name").toString();
 	contact["login"] = query.value("login").toString();
 	contact["image"] = query.value("image").toString();
@@ -363,11 +416,12 @@ bool Database::queryContact(QJsonObject& contact, int cid)
 bool Database::linkContact(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
-	query.prepare("INSERT INTO " + QString(kLinkContactsName) + " (cid, rid, ts)"
-															" VALUES (:cid, :rid, :ts)");
+	query.prepare("INSERT INTO " + QString(kLinkContactsName) + " (cid, rid, approved, ts)"
+															" VALUES (:cid, :rid, :approved, :ts)");
 
 	query.bindValue(":cid", object["cid"].toInt());
 	query.bindValue(":rid", object["rid"].toInt());
+	query.bindValue(":approved", object["rapprovedid"].toBool());
 	query.bindValue(":ts", QVariant(QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss")));
 
 	if (!query.exec())

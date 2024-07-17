@@ -1,6 +1,7 @@
 #include "server.h"
 #include "log.h"
 #include "settings.h"
+#include "dispatcher.h"
 
 Server::Server()
 	: server_(new QWebSocketServer("Maty Server", QWebSocketServer::NonSecureMode, this))
@@ -55,14 +56,14 @@ void Server::processBinaryMessage(const QByteArray &message)
 
 void Server::socketDisconnected()
 {
-	QWebSocket *client = qobject_cast<QWebSocket *>(sender());
-	if (client)
+	QWebSocket *socket = qobject_cast<QWebSocket *>(sender());
+	if (socket)
 	{
-		client->deleteLater();
+		GetDispatcher()->clientService().remove(socket);
+		//socket->deleteLater();
 	}
 }
 
 void Server::sendMessage(const QString &message)
 {
-
 }

@@ -2,7 +2,6 @@
 #define DISPATCHER_H
 
 #include "server.h"
-#include "database.h"
 #include "client.h"
 
 #include <QObject>
@@ -19,9 +18,14 @@ public:
 		Auth,
 		Message,
 		Search,
+		QueryContact,
 		LinkContact,
 		UnlinkContact,
-		ClearHistory
+		AddHistory,
+		ModifyHistory,
+		RemoveHistory,
+		ClearHistory,
+		NewHistory
 	};
 
 	enum class ErrorCode
@@ -41,8 +45,7 @@ public:
 
 private:
 	Server server_;
-	Database db_;
-	Clients clients_;
+	ClientService clientService_;
 
 public:
 	Dispatcher();
@@ -55,6 +58,7 @@ private slots:
 public:
 	bool start();
 	void stop();
+	ClientService& clientService() { return clientService_; }
 
 private:
 	void actionRegistration(QJsonObject &object, QWebSocket *socket);
@@ -63,6 +67,12 @@ private:
 	void actionMessage(const QJsonObject &object, QWebSocket *socket);
 	void actionLinkContact(const QJsonObject &object, QWebSocket *socket);
 	void actionUnlinkContact(const QJsonObject &object, QWebSocket *socket);
+	void actionQueryContact(const QJsonObject &object, QWebSocket *socket);
+
+	void actionAddHistory(const QJsonObject &object, QWebSocket *socket);
+	void actionModifyHistory(const QJsonObject &object, QWebSocket *socket);
+	void actionRemoveHistory(const QJsonObject &object, QWebSocket *socket);
+	void actionClearHistory(const QJsonObject &object, QWebSocket *socket);
 };
 
 using DispatcherPtr = QSharedPointer<Dispatcher>;

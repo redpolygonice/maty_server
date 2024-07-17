@@ -17,6 +17,7 @@
 using HistoryRecord = std::tuple<QString, QString, QDateTime>;
 using JsonObjectList = QList<QJsonObject>;
 using IntList = QList<int>;
+using VariantMapList = QList<QVariantMap>;
 
 // Sqlite database
 class Database : public QObject
@@ -28,8 +29,10 @@ class Database : public QObject
 private:
 	QSqlDatabase db_;
 
-public:
+private:
 	Database();
+
+public:
 	virtual ~Database();
 
 	Database(const Database&) = delete;
@@ -38,16 +41,18 @@ public:
 	Database& operator= (Database&&) = delete;
 
 public:
-	bool appendHistory(const QVariantList &list);
+	bool appendHistory(const QJsonObject &object);
+	bool modifyHistory(const QJsonObject &object);
 	bool removeHistory(int id);
-	bool modifyHistory(int id, const QString &text);
 	bool clearHistory(int cid);
+	bool queryHistory(VariantMapList &list, const QVariantMap &options);
+	bool setReadHistory(int cid);
 
 	int appendContact(const QJsonObject &object);
 	bool modifyContact(const QJsonObject &object);
 	bool removeContact(const QJsonObject &object);
 	bool contactExists(const QJsonObject &object) const;
-	QString getPassword(const QString &login) const;
+	QString queryPassword(const QString &login) const;
 	bool searchContacts(QJsonObject &object, const QString &name, int cid);
 	bool queryContact(QJsonObject &contact, const QString &login);
 	bool queryContact(QJsonObject &contact, int cid);
@@ -63,5 +68,15 @@ public:
 private:
 	bool createTables();
 };
+
+using DatabasePtr = QSharedPointer<Database>;
+
+inline DatabasePtr GetDatabase()
+{
+	static DatabasePtr database = nullptr;
+	if (database == nullptr)
+		database = QSharedPointer<Database>::create();
+	return database;
+}
 
 #endif // DATABASE_H
