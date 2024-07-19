@@ -43,7 +43,7 @@ public:
 public:
 	bool appendHistory(const QJsonObject &object);
 	bool modifyHistory(const QJsonObject &object);
-	bool removeHistory(int id);
+	bool removeHistory(const QJsonObject &object);
 	bool clearHistory(int cid);
 	bool queryHistory(VariantMapList &list, const QVariantMap &options);
 	bool setReadHistory(int cid);
@@ -56,6 +56,7 @@ public:
 	bool searchContacts(QJsonObject &object, const QString &name, int cid);
 	bool queryContact(QJsonObject &contact, const QString &login);
 	bool queryContact(QJsonObject &contact, int cid);
+	bool linkExists(const QJsonObject &object);
 	bool linkContact(const QJsonObject &object);
 	bool unlinkContact(const QJsonObject &object);
 	IntList queryLinks(int cid);

@@ -66,8 +66,6 @@ public:
 
 private:
 	std::string createLine(const std::string &text, Log::Level level);
-	std::string currentTime();
-	std::string currentTimeMs();
 };
 
 inline void log(const std::string &text, Log::Level level = Log::Level::Info) { Log::put(text, level); }

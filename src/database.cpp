@@ -117,8 +117,10 @@ bool Database::appendHistory(const QJsonObject &object)
 bool Database::modifyHistory(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
-	query.prepare("UPDATE " + QString(kHistoryName) + " SET text = :text WHERE id = :id");
-	query.bindValue(":id", object["id"].toInt());
+	query.prepare("UPDATE " + QString(kHistoryName) + " SET text = :text WHERE hid = :hid AND cid = :cid AND rid = :rid");
+	query.bindValue(":hid", object["hid"].toInt());
+	query.bindValue(":cid", object["cid"].toInt());
+	query.bindValue(":rid", object["rid"].toInt());
 	query.bindValue(":text", object["text"].toString());
 
 	if (!query.exec())
@@ -130,11 +132,13 @@ bool Database::modifyHistory(const QJsonObject &object)
 	return true;
 }
 
-bool Database::removeHistory(int id)
+bool Database::removeHistory(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
-	query.prepare("DELETE FROM " + QString(kHistoryName) + " WHERE id = :id");
-	query.bindValue(":id", id);
+	query.prepare("DELETE FROM " + QString(kHistoryName) + " WHERE hid = :hid AND cid = :cid AND rid = :rid");
+	query.bindValue(":hid", object["hid"].toInt());
+	query.bindValue(":cid", object["cid"].toInt());
+	query.bindValue(":rid", object["rid"].toInt());
 
 	if (!query.exec())
 	{
@@ -148,7 +152,7 @@ bool Database::removeHistory(int id)
 bool Database::clearHistory(int cid)
 {
 	QSqlQuery query(db_);
-	query.prepare("DELETE FROM " + QString(kHistoryName) + " WHERE cid = :cid");
+	query.prepare("DELETE FROM " + QString(kHistoryName) + " WHERE cid = :cid OR rid = :cid");
 	query.bindValue(":cid", cid);
 
 	if (!query.exec())
@@ -411,6 +415,22 @@ bool Database::queryContact(QJsonObject& contact, int id)
 	contact["image"] = query.value("image").toString();
 	contact["phone"] = query.value("phone").toString();
 	return true;
+}
+
+bool Database::linkExists(const QJsonObject& object)
+{
+	QSqlQuery query(db_);
+	query.prepare("SELECT rid FROM " + QString(kLinkContactsName) + " WHERE cid = :cid AND rid = :rid");
+	query.bindValue(":cid", object["cid"].toInt());
+	query.bindValue(":rid", object["rid"].toInt());
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return false;
+	}
+
+	return query.next();
 }
 
 bool Database::linkContact(const QJsonObject &object)

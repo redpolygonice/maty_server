@@ -122,7 +122,7 @@ void Dispatcher::actionAuth(const QJsonObject &object, QWebSocket *socket)
 			contact["update"] = true;
 			GetDatabase()->queryContact(contact, object["login"].toString());
 
-			// Query contacts
+			// Query link contacts
 			QJsonArray links;
 			IntList rids = GetDatabase()->queryLinks(contact["id"].toInt());
 			for (int rid : rids)
@@ -186,6 +186,12 @@ void Dispatcher::actionMessage(const QJsonObject &object, QWebSocket *socket)
 
 void Dispatcher::actionLinkContact(const QJsonObject& object, QWebSocket* socket)
 {
+	if (GetDatabase()->linkExists(object))
+	{
+		LOGW("Link exists!");
+		return;
+	}
+
 	if (!GetDatabase()->linkContact(object))
 		LOGW("Can't link contact!");
 }
@@ -225,7 +231,7 @@ void Dispatcher::actionModifyHistory(const QJsonObject& object, QWebSocket* sock
 
 void Dispatcher::actionRemoveHistory(const QJsonObject& object, QWebSocket* socket)
 {
-	if (!GetDatabase()->removeHistory(object["id"].toInt()))
+	if (!GetDatabase()->removeHistory(object))
 		LOGW("Can't remove history!");
 }
 

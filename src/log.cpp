@@ -1,9 +1,10 @@
 #include "log.h"
+#include "common.h"
+#include "settings.h"
 
 #include <iostream>
 #include <ctime>
 #include <sys/time.h>
-#include "settings.h"
 
 LoggerPtr Log::_instance = nullptr;
 
@@ -69,35 +70,4 @@ std::string Log::createLine(const std::string &text, Log::Level level)
 
 	std::string line = "[" + currentTimeMs() + "] " + prefix + text;
 	return line;
-}
-
-std::string Log::currentTime()
-{
-	std::time_t time = std::time(NULL);
-	char timeStr[50];
-	std::strftime(timeStr, sizeof(timeStr), "%Y-%m-%d_%H-%M-%S", std::localtime(&time));
-	return timeStr;
-}
-
-std::string Log::currentTimeMs()
-{
-	char timeStr[50];
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	std::time_t now = tv.tv_sec;
-	struct tm *tm = std::localtime(&now);
-
-	if (tm == nullptr)
-		return currentTime();
-
-	sprintf(timeStr, "%04d-%02d-%02d_%02d-%02d-%02d.%03d",
-			tm->tm_year + 1900,
-			tm->tm_mon + 1,
-			tm->tm_mday,
-			tm->tm_hour,
-			tm->tm_min,
-			tm->tm_sec,
-			static_cast<int>(tv.tv_usec / 1000));
-
-	return timeStr;
 }
