@@ -19,6 +19,13 @@ using JsonObjectList = QList<QJsonObject>;
 using IntList = QList<int>;
 using VariantMapList = QList<QVariantMap>;
 
+enum class HistoryState
+{
+	Regular,
+	Modified,
+	Removed
+};
+
 // Sqlite database
 class Database : public QObject
 {
@@ -43,6 +50,7 @@ public:
 public:
 	bool appendHistory(const QJsonObject &object);
 	bool modifyHistory(const QJsonObject &object);
+	bool modifyRemoveHistory(const QJsonObject &object);
 	bool removeHistory(const QJsonObject &object);
 	bool clearHistory(int cid);
 	bool queryHistory(VariantMapList &list, const QVariantMap &options);

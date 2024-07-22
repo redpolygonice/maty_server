@@ -41,7 +41,7 @@ void Dispatcher::stop()
 
 void Dispatcher::processMessage(const QString &message, QWebSocket *socket)
 {
-	LOG("Message received: " << message.toStdString());
+	logMessage(message);
 
 	QJsonParseError error;
 	QJsonDocument document = QJsonDocument::fromJson(message.toUtf8(), &error);
@@ -95,7 +95,7 @@ void Dispatcher::actionRegistration(QJsonObject &object, QWebSocket *socket)
 	else
 	{
 		object["password"] = QString(QCryptographicHash::hash(object["password"].toString().toLocal8Bit(),
-									 QCryptographicHash::Sha256).toHex());
+															  QCryptographicHash::Sha256).toHex());
 		contact["code"] = static_cast<int>(ErrorCode::Ok);
 		contact["id"] = GetDatabase()->appendContact(object);
 	}
@@ -116,56 +116,56 @@ void Dispatcher::actionAuth(const QJsonObject &object, QWebSocket *socket)
 	else
 	{
 		contact["code"] = static_cast<int>(ErrorCode::Ok);
-
-		if (object["querydata"].toBool())
-		{
-			contact["update"] = true;
-			GetDatabase()->queryContact(contact, object["login"].toString());
-
-			// Query link contacts
-			QJsonArray links;
-			IntList rids = GetDatabase()->queryLinks(contact["id"].toInt());
-			for (int rid : rids)
-			{
-				QJsonObject linkContact;
-				if (GetDatabase()->queryContact(linkContact, rid))
-					links.push_back(linkContact);
-			}
-
-			contact["links"] = links;
-
-			// Query history
-			QVariantMap options;
-			options["all"] = true;
-			options["cid"] = contact["id"].toInt();
-
-			VariantMapList historyList;
-			if (GetDatabase()->queryHistory(historyList, options))
-			{
-				QJsonObject root;
-				QJsonArray historyArray;
-				for (const QVariantMap &data : historyList)
-				{
-					QJsonObject history = QJsonObject::fromVariantMap(data);
-					historyArray.push_back(history);
-				}
-
-				contact["history"] = historyArray;
-				GetDatabase()->setReadHistory(contact["id"].toInt());
-				LOG("Query history, contact: " << contact["id"].toInt());
-			}
-		}
+		contact["login"] = object["login"].toString();
+		contact["update"] = true;
+		actionQueryData(contact);
 
 		if (object["id"].toInt() == 0)
-		{
-			GetDatabase()->queryContact(contact, object["login"].toString());
 			clientService_.add(contact["id"].toInt(), contact["login"].toString(), socket);
-		}
 		else
 			clientService_.add(object["id"].toInt(), object["login"].toString(), socket);
 	}
 
 	socket->sendTextMessage(QJsonDocument(contact).toJson(QJsonDocument::Compact));
+}
+
+void Dispatcher::actionQueryData(QJsonObject& contact)
+{
+	GetDatabase()->queryContact(contact, contact["login"].toString());
+
+	// Query link contacts
+	QJsonArray links;
+	IntList rids = GetDatabase()->queryLinks(contact["id"].toInt());
+	for (int rid : rids)
+	{
+		QJsonObject linkContact;
+		if (GetDatabase()->queryContact(linkContact, rid))
+			links.push_back(linkContact);
+	}
+
+	contact["links"] = links;
+
+	// Query history
+	QVariantMap options;
+	options["all"] = true;
+	options["cid"] = contact["id"].toInt();
+
+	VariantMapList historyList;
+	if (GetDatabase()->queryHistory(historyList, options))
+	{
+		QJsonObject root;
+		QJsonArray historyArray;
+		for (const QVariantMap &data : historyList)
+		{
+			QJsonObject history = QJsonObject::fromVariantMap(data);
+			historyArray.push_back(history);
+		}
+
+		contact["history"] = historyArray;
+		GetDatabase()->setReadHistory(contact["id"].toInt());
+	}
+
+	LOG("Query data, contact: " << contact["id"].toInt() << ", " << contact["login"].toString().toStdString());
 }
 
 void Dispatcher::actionSearch(const QJsonObject &object, QWebSocket *socket)
@@ -188,7 +188,7 @@ void Dispatcher::actionLinkContact(const QJsonObject& object, QWebSocket* socket
 {
 	if (GetDatabase()->linkExists(object))
 	{
-		LOGW("Link exists!");
+		LOGW("Link exists! cid: " << object["cid"].toInt() << ", rid: " << object["rid"].toInt());
 		return;
 	}
 
@@ -231,7 +231,7 @@ void Dispatcher::actionModifyHistory(const QJsonObject& object, QWebSocket* sock
 
 void Dispatcher::actionRemoveHistory(const QJsonObject& object, QWebSocket* socket)
 {
-	if (!GetDatabase()->removeHistory(object))
+	if (!GetDatabase()->modifyRemoveHistory(object))
 		LOGW("Can't remove history!");
 }
 
@@ -239,4 +239,38 @@ void Dispatcher::actionClearHistory(const QJsonObject& object, QWebSocket* socke
 {
 	if (!GetDatabase()->clearHistory(object["cid"].toInt()))
 		LOGW("Can't clear history!");
+
+	ClientPtr client = clientService_.find(object["cid"].toInt());
+	if (client == nullptr)
+		return;
+
+	QJsonObject root;
+	root["action"] = static_cast<int>(Action::ClearHistory);
+	root["cid"] = object["cid"].toInt();
+	client->socket()->sendTextMessage(QJsonDocument(root).toJson(QJsonDocument::Compact));
+}
+
+void Dispatcher::logMessage(const QString &message)
+{
+	if (!message.contains("\"image\""))
+	{
+		LOG("Message received: " << message.toStdString());
+		return;
+	}
+
+	QJsonParseError error;
+	QJsonDocument document = QJsonDocument::fromJson(message.toUtf8(), &error);
+	if (error.error != QJsonParseError::NoError)
+	{
+		LOGE(error.errorString().toStdString());
+		return;
+	}
+
+	QJsonObject rootObject = document.object();
+
+	if (rootObject["image"].isString())
+		rootObject["image"] = "base64";
+
+	LOG("Message received: " <<
+		QJsonDocument(rootObject).toJson(QJsonDocument::Compact).toStdString());
 }

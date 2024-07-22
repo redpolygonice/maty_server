@@ -54,13 +54,16 @@ public:
 	void add(int id, const QString &login, QWebSocket *socket) {
 		clients_.push_back(QSharedPointer<Client>::create(id, login, socket)); }
 	void add(const ClientPtr &client) { clients_.push_back(client); }
+	ClientPtr find(int id) const;
 	void remove(int id);
 	void remove(const WebSocketPtr &socket);
 	void remove(const QWebSocket *socket);
 
 private:
 	void run();
-	void checkHistory(const ClientPtr &client);
+	void checkNewHistory(const ClientPtr &client);
+	void checkModifiedHistory(const ClientPtr &client);
+	void checkRemovedHistory(const ClientPtr &client);
 };
 
 #endif // CLIENT_H

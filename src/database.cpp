@@ -47,12 +47,12 @@ bool Database::createTables()
 	QSqlQuery query(db_);
 	if (!query.exec("CREATE TABLE " + QString(kHistoryName) + " ("
 					"id INTEGER PRIMARY KEY AUTOINCREMENT, "
-					"hid INTEGER KEY NOT NULL, "
-					"cid INTEGER KEY NOT NULL, "
-					"rid INTEGER KEY NOT NULL, "
+					"hid INTEGER KEY NOT NULL, " // Id from cliemt history
+					"cid INTEGER KEY NOT NULL, " // Sender id
+					"rid INTEGER KEY NOT NULL, " // Receyver id
 					"text TEXT NOT NULL,"
 					"read BOOLEAN,"
-					"sync BOOLEAN,"
+					"state INTEGER,"
 					"ts TIMESTAMP NOT NULL)"))
 	{
 		LOGE(query.lastError().text().toStdString());
@@ -95,14 +95,15 @@ void Database::close()
 bool Database::appendHistory(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
-	query.prepare("INSERT INTO " + QString(kHistoryName) + " (hid, cid, rid, text, read, ts)"
-					" VALUES (:hid, :cid, :rid, :text, :read, :ts)");
+	query.prepare("INSERT INTO " + QString(kHistoryName) + " (hid, cid, rid, text, read, state, ts)"
+														   " VALUES (:hid, :cid, :rid, :text, :read, :state, :ts)");
 
 	query.bindValue(":hid", object["hid"].toInt());
 	query.bindValue(":cid", object["cid"].toInt());
 	query.bindValue(":rid",  object["rid"].toInt());
 	query.bindValue(":text", object["text"].toString());
 	query.bindValue(":read", false);
+	query.bindValue(":state", static_cast<int>(HistoryState::Regular));
 	query.bindValue(":ts", QVariant(QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss")));
 
 	if (!query.exec())
@@ -117,11 +118,34 @@ bool Database::appendHistory(const QJsonObject &object)
 bool Database::modifyHistory(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
-	query.prepare("UPDATE " + QString(kHistoryName) + " SET text = :text WHERE hid = :hid AND cid = :cid AND rid = :rid");
+	query.prepare("UPDATE " + QString(kHistoryName) + " SET text = :text, state = :state, read = :read"
+													  " WHERE hid = :hid AND cid = :cid AND rid = :rid");
 	query.bindValue(":hid", object["hid"].toInt());
 	query.bindValue(":cid", object["cid"].toInt());
 	query.bindValue(":rid", object["rid"].toInt());
+	query.bindValue(":read", false);
 	query.bindValue(":text", object["text"].toString());
+	query.bindValue(":state", static_cast<int>(HistoryState::Modified));
+
+	if (!query.exec())
+	{
+		LOGE(query.lastError().text().toStdString());
+		return false;
+	}
+
+	return true;
+}
+
+bool Database::modifyRemoveHistory(const QJsonObject& object)
+{
+	QSqlQuery query(db_);
+	query.prepare("UPDATE " + QString(kHistoryName) + " SET state = :state, read = :read"
+													  " WHERE hid = :hid AND cid = :cid AND rid = :rid");
+	query.bindValue(":hid", object["hid"].toInt());
+	query.bindValue(":cid", object["cid"].toInt());
+	query.bindValue(":rid", object["rid"].toInt());
+	query.bindValue(":read", false);
+	query.bindValue(":state", static_cast<int>(HistoryState::Removed));
 
 	if (!query.exec())
 	{
@@ -171,11 +195,26 @@ bool Database::queryHistory(VariantMapList& mapList, const QVariantMap &options)
 
 	if (options["all"].toBool())
 		query.prepare("SELECT * FROM " + QString(kHistoryName) +
-				" WHERE rid = " + QString::number(options["cid"].toInt()) +
-				" OR cid = " + QString::number(options["cid"].toInt()));
+					  " WHERE (rid = " + QString::number(options["cid"].toInt()) +
+					  " OR cid = " + QString::number(options["cid"].toInt()) +
+					  ") AND state != " + QString::number(static_cast<int>(HistoryState::Removed)));
+
+	else if (options["state"].toInt() == static_cast<int>(HistoryState::Modified))
+		query.prepare("SELECT * FROM " + QString(kHistoryName) +
+					  " WHERE read IS FALSE"
+					  " AND state = " + QString::number(static_cast<int>(HistoryState::Modified)) +
+					  " AND rid = " + QString::number(options["cid"].toInt()));
+
+	else if (options["state"].toInt() == static_cast<int>(HistoryState::Removed))
+		query.prepare("SELECT * FROM " + QString(kHistoryName) +
+					  " WHERE read IS FALSE"
+					  " AND state = " + QString::number(static_cast<int>(HistoryState::Removed)) +
+					  " AND rid = " + QString::number(options["cid"].toInt()));
+
 	else
 		query.prepare("SELECT * FROM " + QString(kHistoryName) +
 					  " WHERE read IS FALSE"
+					  " AND state = " + QString::number(static_cast<int>(HistoryState::Regular)) +
 					  " AND rid = " + QString::number(options["cid"].toInt()));
 
 	if (!query.exec())
@@ -187,11 +226,12 @@ bool Database::queryHistory(VariantMapList& mapList, const QVariantMap &options)
 	while (query.next())
 	{
 		QVariantMap history;
-		history["hid"] = query.value("hid").toInt();
+		history["hid"] = query.value("id").toInt();
 		history["cid"] = query.value("cid").toInt();
 		history["rid"] = query.value("rid").toInt();
 		history["text"] = query.value("text").toString();
 		history["read"] = query.value("read").toBool();
+		history["state"] = query.value("state").toInt();
 		history["ts"] = query.value("ts").toDateTime();
 		mapList.push_back(history);
 	}
@@ -218,7 +258,7 @@ int Database::appendContact(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
 	query.prepare("INSERT INTO " + QString(kContactsName) + " (name, login, password, image, phone, ts)"
-												" VALUES (:name, :login, :password, :image, :phone, :ts)");
+															" VALUES (:name, :login, :password, :image, :phone, :ts)");
 
 	query.bindValue(":name", object["name"].toString());
 	query.bindValue(":login", object["login"].toString());
@@ -437,7 +477,7 @@ bool Database::linkContact(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
 	query.prepare("INSERT INTO " + QString(kLinkContactsName) + " (cid, rid, approved, ts)"
-															" VALUES (:cid, :rid, :approved, :ts)");
+																" VALUES (:cid, :rid, :approved, :ts)");
 
 	query.bindValue(":cid", object["cid"].toInt());
 	query.bindValue(":rid", object["rid"].toInt());

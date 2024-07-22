@@ -1,12 +1,19 @@
 #include "common.h"
+#include "log.h"
 
 #include <sys/time.h>
 #include <ctime>
 #include <chrono>
 
+#ifndef WIN32
 #include <unistd.h>
 #include <sys/types.h>
 #include <fstream>
+#else
+#include <windows.h>
+#include <tlhelp32.h>
+#include <psapi.h>
+#endif
 
 std::string currentTime()
 {
@@ -51,6 +58,7 @@ int64_t timestamp_micro()
 
 bool isQtCreatorParentProc()
 {
+#ifndef WIN32
 	std::string ppid = std::to_string(getppid());
 	std::string fileName = "/proc/" + ppid + "/comm";
 
@@ -64,6 +72,49 @@ bool isQtCreatorParentProc()
 	if (line.find("qtcreator") != std::string::npos ||
 		line.find("gdb") != std::string::npos)
 		return true;
+#else
+	PROCESSENTRY32 pe32;
+	DWORD pid = GetCurrentProcessId();
+	bool result = false;
 
-	return false;
+	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (hSnapshot == INVALID_HANDLE_VALUE)
+		return false;
+
+	ZeroMemory(&pe32, sizeof(pe32));
+	pe32.dwSize = sizeof(pe32);
+	if (!Process32First(hSnapshot, &pe32))
+		return false;
+
+	do
+	{
+		if (pe32.th32ProcessID == pid)
+		{
+			HANDLE hParent = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+				FALSE, pe32.th32ParentProcessID);
+
+			if (hParent == INVALID_HANDLE_VALUE)
+				return false;
+
+			DWORD dwSize = MAX_PATH;
+			char szName[dwSize];
+			if (!QueryFullProcessImageNameA(hParent, 0, szName, &dwSize))
+				return false;
+
+			std::string procName(szName);
+			if (procName.find("qtcreator") != std::string::npos ||
+				procName.find("gdb") != std::string::npos)
+			{
+				result = true;
+				break;
+			}
+		}
+	}
+	while (Process32Next(hSnapshot, &pe32));
+
+	if (hSnapshot != INVALID_HANDLE_VALUE)
+		CloseHandle(hSnapshot);
+
+	return result;
+#endif
 }

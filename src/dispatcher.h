@@ -69,10 +69,14 @@ private:
 	void actionUnlinkContact(const QJsonObject &object, QWebSocket *socket);
 	void actionQueryContact(const QJsonObject &object, QWebSocket *socket);
 
+	void actionQueryData(QJsonObject &contact);
 	void actionAddHistory(const QJsonObject &object, QWebSocket *socket);
 	void actionModifyHistory(const QJsonObject &object, QWebSocket *socket);
 	void actionRemoveHistory(const QJsonObject &object, QWebSocket *socket);
 	void actionClearHistory(const QJsonObject &object, QWebSocket *socket);
+
+private:
+	void logMessage(const QString &message);
 };
 
 using DispatcherPtr = QSharedPointer<Dispatcher>;

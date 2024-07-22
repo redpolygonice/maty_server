@@ -7,6 +7,8 @@
 #include <QJsonObject>
 #include <QJsonArray>
 
+#include <algorithm>
+
 Client::Client(int id, const QString &login, QWebSocket *socket)
 	: id_(id)
 	, login_(login)
@@ -44,6 +46,18 @@ void ClientService::stop()
 	thread_->wait();
 }
 
+ClientPtr ClientService::find(int id) const
+{
+	ClientList::const_iterator it = std::find_if(clients_.begin(), clients_.end(),
+							 [id](const ClientPtr &client) {
+		return client->id() == id;
+	});
+
+	if (it != clients_.end())
+		return *it;
+	return nullptr;
+}
+
 void ClientService::remove(int id)
 {
 	clients_.removeIf([id](const ClientPtr &client) {
@@ -71,17 +85,20 @@ void ClientService::run()
 	{
 		for (const ClientPtr &client : clients_)
 		{
-			checkHistory(client);
+			checkNewHistory(client);
+			checkModifiedHistory(client);
+			checkRemovedHistory(client);
 		}
 
 		QThread::msleep(100);
 	}
 }
 
-void ClientService::checkHistory(const ClientPtr& client)
+void ClientService::checkNewHistory(const ClientPtr& client)
 {
 	QVariantMap options;
 	options["all"] = false;
+	options["state"] = static_cast<int>(HistoryState::Regular);
 	options["cid"] = client->id();
 
 	VariantMapList historyList;
@@ -100,5 +117,57 @@ void ClientService::checkHistory(const ClientPtr& client)
 		emit messageReady(client, QJsonDocument(root).toJson(QJsonDocument::Compact));
 		GetDatabase()->setReadHistory(client->id());
 		LOG("Update history, contact: " << client->login().toStdString());
+	}
+}
+
+void ClientService::checkModifiedHistory(const ClientPtr& client)
+{
+	QVariantMap options;
+	options["all"] = false;
+	options["state"] = static_cast<int>(HistoryState::Modified);
+	options["cid"] = client->id();
+
+	VariantMapList historyList;
+	if (GetDatabase()->queryHistory(historyList, options))
+	{
+		QJsonObject root;
+		QJsonArray historyArray;
+		for (const QVariantMap &data : historyList)
+		{
+			QJsonObject history = QJsonObject::fromVariantMap(data);
+			historyArray.push_back(history);
+		}
+
+		root["history"] = historyArray;
+		root["action"] = static_cast<int>(Dispatcher::Action::ModifyHistory);
+		emit messageReady(client, QJsonDocument(root).toJson(QJsonDocument::Compact));
+		GetDatabase()->setReadHistory(client->id());
+		LOG("Modify history, contact: " << client->login().toStdString());
+	}
+}
+
+void ClientService::checkRemovedHistory(const ClientPtr& client)
+{
+	QVariantMap options;
+	options["all"] = false;
+	options["state"] = static_cast<int>(HistoryState::Removed);
+	options["cid"] = client->id();
+
+	VariantMapList historyList;
+	if (GetDatabase()->queryHistory(historyList, options))
+	{
+		QJsonObject root;
+		QJsonArray historyArray;
+		for (const QVariantMap &data : historyList)
+		{
+			QJsonObject history = QJsonObject::fromVariantMap(data);
+			historyArray.push_back(history);
+		}
+
+		root["history"] = historyArray;
+		root["action"] = static_cast<int>(Dispatcher::Action::RemoveHistory);
+		emit messageReady(client, QJsonDocument(root).toJson(QJsonDocument::Compact));
+		GetDatabase()->setReadHistory(client->id());
+		LOG("Remove history, contact: " << client->login().toStdString());
 	}
 }
