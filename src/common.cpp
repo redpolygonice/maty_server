@@ -72,6 +72,7 @@ bool isQtCreatorParentProc()
 	if (line.find("qtcreator") != std::string::npos ||
 		line.find("gdb") != std::string::npos)
 		return true;
+	return false;
 #else
 	PROCESSENTRY32 pe32;
 	DWORD pid = GetCurrentProcessId();

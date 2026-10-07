@@ -19,8 +19,7 @@ file(GLOB_RECURSE SOURCES "src/*.h" "src/*.cpp" "src/*.cc")
 source_group("src" FILES ${SOURCES})
 
 # Executable
-add_executable(${PROJECT_NAME} ${SOURCES}
-	src/client.h src/client.cpp)
+add_executable(${PROJECT_NAME} ${SOURCES})
 target_link_libraries(${PROJECT_NAME} Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Sql
 Qt${QT_VERSION_MAJOR}::Network Qt${QT_VERSION_MAJOR}::WebSockets Threads::Threads)
 

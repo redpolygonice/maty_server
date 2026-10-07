@@ -60,7 +60,6 @@ void Server::socketDisconnected()
 	if (socket)
 	{
 		GetDispatcher()->clientService().remove(socket);
-		//socket->deleteLater();
 	}
 }
 

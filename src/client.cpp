@@ -12,7 +12,7 @@
 Client::Client(int id, const QString &login, QWebSocket *socket)
 	: id_(id)
 	, login_(login)
-	, socket_(socket)
+	, socket_(socket, &QObject::deleteLater)
 {
 }
 
