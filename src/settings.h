@@ -6,6 +6,9 @@
 #include <QString>
 #include <QVariantMap>
 
+constexpr char kCertName[] = "server.crt";
+constexpr char kKeyName[] = "server.key";
+
 class Settings : public QObject
 {
 	friend class QSharedPointer<Settings>;
@@ -21,12 +24,14 @@ private:
 
 public:
 	QString logPath() const;
-	static QString dataPath();
 	bool load();
 	bool save();
 
 	QVariantMap &params() { return params_; }
 	void setParams(const QVariantMap &map) { params_ = map; }
+
+	static QString dataPath();
+	static QString certPath();
 };
 
 using SettingsPtr = QSharedPointer<Settings>;

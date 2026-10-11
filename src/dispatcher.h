@@ -19,6 +19,7 @@ public:
 		Message,
 		Search,
 		QueryContact,
+		ModifyContact,
 		LinkContact,
 		UnlinkContact,
 		AddHistory,
@@ -68,6 +69,7 @@ private:
 	void actionLinkContact(const QJsonObject &object, QWebSocket *socket);
 	void actionUnlinkContact(const QJsonObject &object, QWebSocket *socket);
 	void actionQueryContact(const QJsonObject &object, QWebSocket *socket);
+	void actionModifyContact(const QJsonObject &object, QWebSocket *socket);
 
 	void actionQueryData(QJsonObject &contact);
 	void actionAddHistory(const QJsonObject &object, QWebSocket *socket);

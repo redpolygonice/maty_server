@@ -64,7 +64,8 @@ bool Database::createTables()
 					"name VARCHAR(50) NOT NULL,"
 					"login VARCHAR(50) NOT NULL,"
 					"password VARCHAR(50) NOT NULL,"
-					"image TEXT,"
+					"image_data TEXT,"
+					"image_hash VARCHAR(64),"
 					"phone VARCHAR(20),"
 					"about VARCHAR(250),"
 					"ts TIMESTAMP NOT NULL)"))
@@ -257,14 +258,17 @@ bool Database::setReadHistory(int cid)
 int Database::appendContact(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
-	query.prepare("INSERT INTO " + QString(kContactsName) + " (name, login, password, image, phone, ts)"
-															" VALUES (:name, :login, :password, :image, :phone, :ts)");
+	query.prepare("INSERT INTO " + QString(kContactsName) + " (name, login, password, image_data, image_hash, phone, about, ts)"
+															" VALUES (:name, :login, :password, :image_data, :image_hash,"
+															":phone, :about, :ts)");
 
 	query.bindValue(":name", object["name"].toString());
 	query.bindValue(":login", object["login"].toString());
 	query.bindValue(":password", object["password"].toString());
-	query.bindValue(":image", object["image"].toString());
+	query.bindValue(":image_data", object["image_data"].toString());
+	query.bindValue(":image_hash", object["image_hash"].toString());
 	query.bindValue(":phone", object["phone"].toString());
+	query.bindValue(":about", object["about"].toString());
 	query.bindValue(":ts", QVariant(QDateTime::currentDateTime().toString("dd.MM.yyyy hh:mm:ss")));
 
 	if (!query.exec())
@@ -289,15 +293,16 @@ bool Database::modifyContact(const QJsonObject &object)
 {
 	QSqlQuery query(db_);
 	query.prepare("UPDATE " + QString(kContactsName) + " SET name = :name, login = :login,"
-													   " password = :password. image = :image, "
-													   "phone = :phone WHERE id = :id");
+													   "image_data = :image_data, image_hash = :image_hash,"
+													   "phone = :phone, about = :about WHERE id = :id");
 
 	query.bindValue(":id", object["id"].toInt());
 	query.bindValue(":name", object["name"].toString());
 	query.bindValue(":login", object["login"].toString());
-	query.bindValue(":password", object["password"].toString());
-	query.bindValue(":image", object["image"].toString());
+	query.bindValue(":image_data", object["image_data"].toString());
+	query.bindValue(":image_hash", object["image_hash"].toString());
 	query.bindValue(":phone", object["phone"].toString());
+	query.bindValue(":about", object["about"].toString());
 
 	if (!query.exec())
 	{
@@ -379,8 +384,10 @@ bool Database::searchContacts(QJsonObject &object, const QString &name, int cid)
 		contact["id"] = query.value("id").toInt();
 		contact["name"] = query.value("name").toString();
 		contact["login"] = query.value("login").toString();
-		contact["image"] = query.value("image").toString();
+		contact["image_data"] = query.value("image_data").toString();
+		contact["image_hash"] = query.value("image_hash").toString();
 		contact["phone"] = query.value("phone").toString();
+		contact["about"] = query.value("about").toString();
 		array.push_back(contact);
 	}
 
@@ -406,8 +413,10 @@ bool Database::queryContact(QJsonObject &contact, const QString &login)
 	contact["id"] = query.value("id").toInt();
 	contact["name"] = query.value("name").toString();
 	contact["login"] = query.value("login").toString();
-	contact["image"] = query.value("image").toString();
+	contact["image_data"] = query.value("image_data").toString();
+	contact["image_hash"] = query.value("image_hash").toString();
 	contact["phone"] = query.value("phone").toString();
+	contact["about"] = query.value("about").toString();
 
 	// Links
 	query.prepare("SELECT * FROM " + QString(kLinkContactsName) + " WHERE cid = :cid");
@@ -452,8 +461,10 @@ bool Database::queryContact(QJsonObject& contact, int id)
 	contact["id"] = query.value("id").toInt();
 	contact["name"] = query.value("name").toString();
 	contact["login"] = query.value("login").toString();
-	contact["image"] = query.value("image").toString();
+	contact["image_data"] = query.value("image_data").toString();
+	contact["image_hash"] = query.value("image_hash").toString();
 	contact["phone"] = query.value("phone").toString();
+	contact["about"] = query.value("about").toString();
 	return true;
 }
 

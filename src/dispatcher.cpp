@@ -1,6 +1,7 @@
 #include "dispatcher.h"
 #include "log.h"
 #include "database.h"
+#include "crypt.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -8,6 +9,7 @@
 #include <QCryptographicHash>
 
 Dispatcher::Dispatcher()
+	:server_(true)
 {
 }
 
@@ -66,6 +68,8 @@ void Dispatcher::processMessage(const QString &message, QWebSocket *socket)
 		actionMessage(rootObject, socket);
 	else if (action == Action::QueryContact)
 		actionQueryContact(rootObject, socket);
+	else if (action == Action::ModifyContact)
+		actionModifyContact(rootObject, socket);
 	else if (action == Action::LinkContact)
 		actionLinkContact(rootObject, socket);
 	else if (action == Action::UnlinkContact)
@@ -94,8 +98,6 @@ void Dispatcher::actionRegistration(QJsonObject &object, QWebSocket *socket)
 		contact["code"] = static_cast<int>(ErrorCode::LoginExists);
 	else
 	{
-		object["password"] = QString(QCryptographicHash::hash(object["password"].toString().toLocal8Bit(),
-															  QCryptographicHash::Sha256).toHex());
 		contact["code"] = static_cast<int>(ErrorCode::Ok);
 		contact["id"] = GetDatabase()->appendContact(object);
 	}
@@ -108,10 +110,17 @@ void Dispatcher::actionAuth(const QJsonObject &object, QWebSocket *socket)
 	QJsonObject contact;
 	contact["action"] = static_cast<int>(Action::Auth);
 
+	// Check login exists
 	if (!GetDatabase()->contactExists(object))
+	{
 		contact["code"] = static_cast<int>(ErrorCode::NoLogin);
-	else if (QString(QCryptographicHash::hash(object["password"].toString().toLocal8Bit(),
-											  QCryptographicHash::Sha256).toHex()) != GetDatabase()->queryPassword(object["login"].toString()))
+		socket->sendTextMessage(QJsonDocument(contact).toJson(QJsonDocument::Compact));
+		return;
+	}
+
+	// Check password
+	Crypt crypt;
+	if (object["password"].toString() != GetDatabase()->queryPassword(object["login"].toString()))
 		contact["code"] = static_cast<int>(ErrorCode::Password);
 	else
 	{
@@ -217,6 +226,16 @@ void Dispatcher::actionQueryContact(const QJsonObject& object, QWebSocket* socke
 	socket->sendTextMessage(QJsonDocument(root).toJson(QJsonDocument::Compact));
 }
 
+void Dispatcher::actionModifyContact(const QJsonObject& object, QWebSocket* socket)
+{
+	QJsonObject contact;
+	if (!GetDatabase()->modifyContact(object))
+	{
+		LOGW("Can't modify contact!");
+		return;
+	}
+}
+
 void Dispatcher::actionAddHistory(const QJsonObject& object, QWebSocket* socket)
 {
 	if (!GetDatabase()->appendHistory(object))
@@ -252,7 +271,7 @@ void Dispatcher::actionClearHistory(const QJsonObject& object, QWebSocket* socke
 
 void Dispatcher::logMessage(const QString &message)
 {
-	if (!message.contains("\"image\""))
+	if (!message.contains("image_data"))
 	{
 		LOG("Message received: " << message.toStdString());
 		return;
@@ -268,8 +287,8 @@ void Dispatcher::logMessage(const QString &message)
 
 	QJsonObject rootObject = document.object();
 
-	if (rootObject["image"].isString())
-		rootObject["image"] = "base64";
+	if (rootObject["image_data"].isString())
+		rootObject["image_data"] = "base64";
 
 	LOG("Message received: " <<
 		QJsonDocument(rootObject).toJson(QJsonDocument::Compact).toStdString());

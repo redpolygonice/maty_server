@@ -15,7 +15,7 @@ private:
 	QWebSocketServer *server_;
 
 public:
-	Server();
+	Server(bool secure = false);
 	~Server();
 
 signals:
@@ -27,6 +27,10 @@ private slots:
 	void processTextMessage(const QString &message);
 	void processBinaryMessage(const QByteArray &message);
 	void socketDisconnected();
+	void processSslErrors(const QList<QSslError>& errors);
+
+private:
+	bool setSslConfiguration();
 
 public:
 	bool start();

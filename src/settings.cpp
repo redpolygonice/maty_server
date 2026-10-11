@@ -45,6 +45,20 @@ QString Settings::dataPath()
 	return dataDir.path();
 }
 
+QString Settings::certPath()
+{
+	QDir appDir = QCoreApplication::applicationDirPath();
+
+	if (isQtCreatorParentProc())
+		appDir.cdUp();
+
+	QDir dataDir = dataPath() + QDir::separator() + "cert";
+	if (!dataDir.exists())
+		dataDir.mkpath(".");
+
+	return dataDir.path();
+}
+
 bool Settings::load()
 {
 	return true;
